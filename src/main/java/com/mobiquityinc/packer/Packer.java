@@ -1,92 +1,59 @@
 package com.mobiquityinc.packer;
 
+import com.mobiquityinc.exception.APIException;
 import com.mobiquityinc.model.Element;
-import com.mobiquityinc.model.Package;
+import com.mobiquityinc.util.PackerHelper;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class Packer {
 
-    public static String pack(String fileName){
+    public static final String PACKAGE_DIVISOR = ":";
 
+    public static String pack(String fileName) throws APIException {
 
-        // EXTRACS DATA FROM FILE
+        if ("".equals(fileName)) {
+            throw new APIException("File name can't be empty");
+        }
 
-        Map<Package, List<Element>> data = new LinkedHashMap<>();
+        StringBuilder result = new StringBuilder();
+        PackerHelper packerHelper = new PackerHelper();
 
         try (Stream<String> stream = Files.lines(Paths.get(fileName))) {
 
-            stream.forEach(line -> {
-                String[] lineData = line.split(":");
-                Integer packageLimit = Integer.valueOf(lineData[0].trim());
+            stream.forEach(lineInput -> {
+
+                String[] lineData = lineInput.split(PACKAGE_DIVISOR);
 
                 String[] lineValue = lineData[1].replaceFirst(" ", "").split(" ");
 
-                List<Element> elemets = new ArrayList<>();
+                Integer packageLimit = Integer.valueOf(lineData[0].trim());
 
-                for (String s : lineValue) {
 
-                    String[] ele = s.trim().replaceAll("([()])", "").split(",");
+                List<Element> elements = new ArrayList<>();
 
-                    elemets.add(new Element(Integer.valueOf(ele[0]), Double.valueOf(ele[1]), Integer.valueOf(ele[2].replace("€", ""))));
-                    Collections.sort(elemets);
+                for (String line : lineValue) {
+
+                    packerHelper.convertLineToElement(elements, line);
                 }
 
-                data.put(new Package(line.length() + packageLimit , packageLimit) , elemets);
+                Collections.sort(elements);
+
+                packerHelper.checkWeightForEqualCost(elements, packageLimit);
+
+                packerHelper.packageItems(result, packageLimit, elements);
             });
 
-            data.forEach((k,v) -> {
-                System.out.println(k + "=" + v);
-            });
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        // PACKAGING ALGORITHM
-        StringBuilder result = new StringBuilder();
-
-
-        System.out.println("===============================================");
-        System.out.println("=====  RESULT  ====");
-
-        for (Map.Entry<Package, List<Element>> element: data.entrySet()) {
-
-            StringBuilder temp = new StringBuilder();
-            Integer packageLimit = element.getKey().getWeighLimit();
-
-            Double currentWeiht = 0.0;
-
-            for (Element e : element.getValue()) {
-
-                Double weightAvailable = packageLimit - currentWeiht;
-
-                if (currentWeiht <= packageLimit
-                        && e.getWeight() < weightAvailable) {
-
-                    temp.append(e.getId()).append(",");
-                    currentWeiht += e.getWeight();
-                }
-            }
-
-            if ("".equals(temp.toString())) {
-                temp.append("-");
-            }
-
-            result.append(temp).append("\n");
-
+        } catch (Exception e) {
+            throw new APIException("Error reading file", e);
         }
 
         return result.toString();
-
-//        4
-//        -
-//        2,7
-//        8,9
     }
 
 }
